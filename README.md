@@ -295,8 +295,8 @@ You can see your submission under **hf.co/your-username**.
 
 | Member   | Algorithm | Environments           |
 | -------- | --------- | ---------------------- |
-| Member A | TD3       | LunarLander, CarRacing |
-| Member B | PPO       | LunarLander, CarRacing |
-| Member C | SAC       | LunarLander, CarRacing |
+| Maryam Habeb | TD3       | LunarLander, CarRacing |
+| Aya Ayman | PPO       | LunarLander, CarRacing |
+| Ziad Asar| SAC       | LunarLander, CarRacing |
 
 
