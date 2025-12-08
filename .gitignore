@@ -1,0 +1,63 @@
+# ------------------------
+# PYTHON
+# ------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.env
+.venv
+venv/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ------------------------
+# RL PROJECT ARTIFACTS
+# ------------------------
+
+# Model weights
+saved_models/
+*.pth
+*.pt
+
+# Replay buffers or results
+*.npz
+*.npy
+
+# Videos produced by RecordVideo
+videos/
+*.mp4
+*.gif
+
+# ------------------------
+# Weights & Biases
+# ------------------------
+wandb/
+wandb/*
+
+# ------------------------
+# Logs
+# ------------------------
+logs/
+*.log
+
+# ------------------------
+# IDE
+# ------------------------
+.vscode/
+.idea/
+
+# ------------------------
+# OS files
+# ------------------------
+.DS_Store
+Thumbs.db
+
+# ------------------------
+# Build / Dist
+# ------------------------
+build/
+dist/

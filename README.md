@@ -215,7 +215,12 @@ All training scripts include:
 Run evaluation with recording enabled:
 
 ```bash
-python training/eval_agent.py --algo td3 --env lunarlander --record
+python -m training.eval_agent \
+    --env lunarlander \
+    --model saved_models/td3/lunarlander.pth \
+    --episodes 100
+
+
 ```
 
 Videos are saved into:

@@ -4,85 +4,104 @@ import argparse
 import numpy as np
 import torch
 import wandb
+import os
 
 from algorithms.td3.agent import TD3Agent
-from common.replay_buffer import ReplayBuffer
 from envs.make_env import make_env
+from common.replay_buffer import ReplayBuffer
 
 
-def train(env_name, episodes=500, max_steps=1000, seed=42):
+def train(env_name, episodes=500):
 
-    # -----------------------------
-    # Setup
-    # -----------------------------
-    np.random.seed(seed)
-    torch.manual_seed(seed)
+    print(f"\n🚀 Training TD3 on {env_name}…")
 
+    # Create environment
     env = make_env(env_name)
+
+    # Extract dimensions
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.shape[0]
     max_action = float(env.action_space.high[0])
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    agent = TD3Agent(state_dim, action_dim, max_action, device=device)
-    replay_buffer = ReplayBuffer(state_dim, action_dim)
+    # Create agent + replay buffer
+    agent = TD3Agent(state_dim, action_dim, max_action, device)
+    replay_buffer = ReplayBuffer(
+        max_size=1_000_000,
+        state_dim=state_dim,
+        action_dim=action_dim
+    )
 
-    # -----------------------------
-    # W&B Logging
-    # -----------------------------
+    # Init Weights & Biases
     wandb.init(
         project="RL-Assignment4",
         name=f"TD3-{env_name}",
-        config={"env": env_name, "episodes": episodes}
+        config={"algorithm": "TD3", "episodes": episodes}
     )
 
-    # -----------------------------
+    # ------------------------
     # Training Loop
-    # -----------------------------
-    total_steps = 0
-
+    # ------------------------
     for ep in range(episodes):
+
         state, _ = env.reset()
-        episode_reward = 0
+        ep_reward = 0
+        terminated = False
+        truncated = False
 
-        for step in range(max_steps):
+        while not (terminated or truncated):
 
-            # Select action + exploration noise
-            action = agent.act(state, noise=0.1)
+            # Select action from agent
+            action = agent.act(state)
 
-            next_state, reward, done, info = env.step(action)
-            replay_buffer.add(state, action, reward, next_state, float(done))
+            # Apply action
+            next_state, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
 
+            # Add transition
+            replay_buffer.add(state, action, reward, next_state, done)
+
+            # Train agent — returns training metrics
+            metrics = agent.train(replay_buffer)
+
+            # Log critic + actor losses
+            if metrics is not None:
+                wandb.log({
+                    "critic_loss": metrics["critic_loss"],
+                    "Q_value_mean": metrics["Q_value_mean"],
+                })
+
+                # Actor updates happen every policy_freq steps
+                if metrics["actor_loss"] is not None:
+                    wandb.log({"actor_loss": metrics["actor_loss"]})
+
+            # Update counters
             state = next_state
-            episode_reward += reward
-            total_steps += 1
+            ep_reward += reward
 
-            # Learning
-            agent.train(replay_buffer)
+        # Log episode reward
+        wandb.log({"episode_reward": ep_reward})
+        print(f"Episode {ep+1}/{episodes} | Reward: {ep_reward:.2f}")
 
-            if done:
-                break
+    # ------------------------
+    # Save Trained Model
+    # ------------------------
+    save_dir = "saved_models/td3"
+    os.makedirs(save_dir, exist_ok=True)
 
-        # -----------------------------
-        # Logging
-        # -----------------------------
-        wandb.log({"episode_reward": episode_reward})
+    save_path = f"{save_dir}/{env_name}.pth"
+    torch.save(agent.actor.state_dict(), save_path)
 
-        print(f"Episode {ep+1}/{episodes} | Reward: {episode_reward:.2f}")
+    print(f"✅ Model saved to {save_path}")
 
     env.close()
-    wandb.finish()
 
 
-# -----------------------------
-# CLI
-# -----------------------------
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, required=True,
-                        choices=["lunarlander", "carracing"])
+    parser.add_argument("--env", type=str, required=True)
     parser.add_argument("--episodes", type=int, default=500)
     args = parser.parse_args()
 
-    train(args.env, episodes=args.episodes)
+    train(args.env.lower(), episodes=args.episodes)

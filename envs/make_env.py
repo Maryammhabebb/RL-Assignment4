@@ -1,21 +1,35 @@
 # envs/make_env.py
 
 import gymnasium as gym
-from envs.wrappers_carracing import CarRacingWrapper
 
-def make_env(env_name):
+
+def make_env(env_name, render_mode=None):
     """
-    Returns the environment, automatically applying
-    wrappers when needed.
+    Creates the correct continuous-action environment for TD3/PPO/SAC.
+    Supports: lunarlander, carracing
     """
 
-    if env_name.lower() == "lunarlander":
-        env = gym.make("LunarLander-v3", continuous=True)
-        return env
+    env_name = env_name.lower()
 
-    elif env_name.lower() == "carracing":
-        env = CarRacingWrapper()
-        return env
+    # ----------------------------
+    # LunarLander Continuous
+    # ----------------------------
+    if env_name == "lunarlander":
+        env_id = "LunarLander-v3"
+        kwargs = {"continuous": True}
 
+    # ----------------------------
+    # CarRacing Environment
+    # ----------------------------
+    elif env_name == "carracing":
+        env_id = "CarRacing-v3"
+        kwargs = {}
+    
     else:
-        raise ValueError(f"Unknown environment: {env_name}")
+        raise ValueError(f"❌ Unknown environment: {env_name}")
+
+    # Add render mode only when needed (e.g., for eval)
+    if render_mode is not None:
+        kwargs["render_mode"] = render_mode
+
+    return gym.make(env_id, **kwargs)
