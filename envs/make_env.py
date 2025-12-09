@@ -23,7 +23,7 @@ def make_env(env_name, render_mode=None):
     # ----------------------------
     elif env_name == "carracing":
         env_id = "CarRacing-v3"
-        kwargs = {}
+        kwargs = {"continuous": True}
     
     else:
         raise ValueError(f"❌ Unknown environment: {env_name}")
