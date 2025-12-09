@@ -4,10 +4,11 @@ import numpy as np
 import torch
 
 class ReplayBuffer:
-    def __init__(self, state_dim, action_dim, max_size=int(1e6)):
+    def __init__(self, state_dim, action_dim, max_size=int(1e6), device="cpu"):
         self.max_size = max_size
         self.ptr = 0
         self.size = 0
+        self.device = device
 
         self.state = np.zeros((max_size, state_dim))
         self.action = np.zeros((max_size, action_dim))
@@ -29,9 +30,9 @@ class ReplayBuffer:
         idx = np.random.randint(0, self.size, size=batch_size)
 
         return (
-            torch.FloatTensor(self.state[idx]),
-            torch.FloatTensor(self.action[idx]),
-            torch.FloatTensor(self.reward[idx]),
-            torch.FloatTensor(self.next_state[idx]),
-            torch.FloatTensor(self.done[idx]),
+            torch.FloatTensor(self.state[idx]).to(self.device),
+            torch.FloatTensor(self.action[idx]).to(self.device),
+            torch.FloatTensor(self.reward[idx]).to(self.device),
+            torch.FloatTensor(self.next_state[idx]).to(self.device),
+            torch.FloatTensor(self.done[idx]).to(self.device),
         )

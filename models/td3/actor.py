@@ -1,4 +1,4 @@
-# algorithms/td3/actor.py
+# models/td3/actor.py
 
 import torch
 import torch.nn as nn

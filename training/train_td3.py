@@ -5,8 +5,13 @@ import numpy as np
 import torch
 import wandb
 import os
+import sys
+from pathlib import Path
 
-from algorithms.td3.agent import TD3Agent
+# Add parent directory to path
+sys.path.append(str(Path(__file__).parent.parent))
+
+from models.td3.agent import TD3Agent
 from envs.make_env import make_env
 from common.replay_buffer import ReplayBuffer
 
@@ -24,13 +29,18 @@ def train(env_name, episodes=500):
     max_action = float(env.action_space.high[0])
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"💻 Using device: {device}")
+    if device == "cuda":
+        print(f"   GPU: {torch.cuda.get_device_name(0)}")
+        print(f"   Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.2f} GB")
 
     # Create agent + replay buffer
     agent = TD3Agent(state_dim, action_dim, max_action, device)
     replay_buffer = ReplayBuffer(
         max_size=1_000_000,
         state_dim=state_dim,
-        action_dim=action_dim
+        action_dim=action_dim,
+        device=device
     )
 
     # Init Weights & Biases
@@ -43,17 +53,25 @@ def train(env_name, episodes=500):
     # ------------------------
     # Training Loop
     # ------------------------
+    total_steps = 0
+    warmup_steps = 10000  # Random actions for exploration
+    episode_rewards = []
+    
     for ep in range(episodes):
 
         state, _ = env.reset()
         ep_reward = 0
         terminated = False
         truncated = False
+        steps = 0
 
         while not (terminated or truncated):
 
-            # Select action from agent
-            action = agent.act(state)
+            # Select action from agent (random during warmup)
+            if total_steps < warmup_steps:
+                action = env.action_space.sample()
+            else:
+                action = agent.act(state)
 
             # Apply action
             next_state, reward, terminated, truncated, info = env.step(action)
@@ -79,10 +97,25 @@ def train(env_name, episodes=500):
             # Update counters
             state = next_state
             ep_reward += reward
+            steps += 1
+            total_steps += 1
 
+        # Track episode rewards
+        episode_rewards.append(ep_reward)
+        avg_reward = np.mean(episode_rewards[-100:])  # Last 100 episodes
+        
         # Log episode reward
-        wandb.log({"episode_reward": ep_reward})
-        print(f"Episode {ep+1}/{episodes} | Reward: {ep_reward:.2f}")
+        wandb.log({
+            "episode_reward": ep_reward,
+            "avg_reward_100": avg_reward,
+            "episode_steps": steps,
+            "total_steps": total_steps
+        })
+        
+        if (ep + 1) % 10 == 0:
+            print(f"Episode {ep+1}/{episodes} | Reward: {ep_reward:.2f} | Avg(100): {avg_reward:.2f} | Steps: {steps}")
+        else:
+            print(f"Episode {ep+1}/{episodes} | Reward: {ep_reward:.2f}")
 
     # ------------------------
     # Save Trained Model
@@ -100,8 +133,8 @@ def train(env_name, episodes=500):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, required=True)
-    parser.add_argument("--episodes", type=int, default=500)
+    parser.add_argument("--env", type=str, default="lunarlander", help="Environment name: lunarlander or carracing (default: lunarlander)")
+    parser.add_argument("--episodes", type=int, default=500, help="Number of training episodes (default: 1000, recommended: 1000-2000 for best results)")
     args = parser.parse_args()
 
     train(args.env.lower(), episodes=args.episodes)

@@ -1,4 +1,4 @@
-# algorithms/td3/critic.py
+# models/td3/critic.py
 
 import torch
 import torch.nn as nn

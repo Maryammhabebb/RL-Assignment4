@@ -1,4 +1,4 @@
-# algorithms/td3/config.py
+# models/td3/config.py
 
 TD3_CONFIG = {
     "actor_lr": 3e-4,

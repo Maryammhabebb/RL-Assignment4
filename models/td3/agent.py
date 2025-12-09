@@ -1,12 +1,12 @@
-# algorithms/td3/agent.py
+# models/td3/agent.py
 
 import torch
 import torch.nn as nn
 import numpy as np
 
-from algorithms.td3.actor import Actor
-from algorithms.td3.critic import Critic
-from algorithms.td3.config import TD3_CONFIG
+from models.td3.actor import Actor
+from models.td3.critic import Critic
+from models.td3.config import TD3_CONFIG
 
 
 class TD3Agent:
@@ -62,13 +62,8 @@ class TD3Agent:
 
         self.total_it += 1
 
-        # Sample batch
+        # Sample batch (tensors are already on the correct device from replay buffer)
         state, action, reward, next_state, done = replay_buffer.sample(self.batch_size)
-        state = state.to(self.device)
-        action = action.to(self.device)
-        reward = reward.to(self.device)
-        next_state = next_state.to(self.device)
-        done = done.to(self.device)
 
         # -----------------------------------------
         # 1. Compute target action (policy smoothing)
@@ -100,6 +95,13 @@ class TD3Agent:
         critic_loss.backward()
         self.critic_optimizer.step()
 
+        # Prepare metrics
+        metrics = {
+            "critic_loss": critic_loss.item(),
+            "Q_value_mean": current_Q1.mean().item(),
+            "actor_loss": None
+        }
+
         # -----------------------------------------
         # 4. Delayed Actor Update
         # -----------------------------------------
@@ -117,6 +119,10 @@ class TD3Agent:
             # -------------------------------------
             self._soft_update(self.actor, self.actor_target)
             self._soft_update(self.critic, self.critic_target)
+
+            metrics["actor_loss"] = actor_loss.item()
+
+        return metrics
 
     # -----------------------------------------------------
     # Soft-update helper
