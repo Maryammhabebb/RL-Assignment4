@@ -6,11 +6,11 @@ SAC_CONFIGS = {
     "LunarLanderContinuous-v3": {
         # Environment settings
         "env_name": "LunarLanderContinuous-v3",
-        "max_episodes": 1000,
-        "max_steps": 1000,
+        "max_episodes": 600,
+        "max_steps": 600,
         
         # SAC hyperparameters
-        "hidden_dim": 256,
+        "hidden_dim": 128,
         "lr": 3e-4,
         "gamma": 0.99,
         "tau": 0.005,
@@ -18,24 +18,24 @@ SAC_CONFIGS = {
         "automatic_entropy_tuning": True,
         
         # Training parameters
-        "batch_size": 256,
-        "buffer_size": 1000000,
+        "batch_size": 128,
+        "buffer_size": 10000,
         "start_steps": 10000,  # Random exploration steps
         "update_after": 1000,  # Start training after this many steps
         "update_every": 50,    # Update frequency
-        "num_updates": 50,     # Number of updates per update step
+        "num_updates": 1,     # Number of updates per update step
         
         # Evaluation
-        "eval_frequency": 10,  # Evaluate every N episodes
-        "num_eval_episodes": 5,
+        "eval_frequency": 50,  # Evaluate every N episodes
+        "num_eval_episodes": 3,
         
         # Logging
         "log_frequency": 10,   # Log every N episodes
-        "save_frequency": 50,  # Save model every N episodes
+        "save_frequency": 100,  # Save model every N episodes
         
         # Early stopping
         "target_reward": 200,  # Stop if this reward is reached
-        "solved_episodes": 10, # Number of consecutive episodes above target
+        "solved_episodes": 5, # Number of consecutive episodes above target
     },
     
     "CarRacing-v3": {
