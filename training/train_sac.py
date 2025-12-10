@@ -28,9 +28,9 @@ def set_seed(seed):
 def create_env(env_name, seed):
     """Create and configure environment"""
     if env_name == "LunarLanderContinuous-v3":
-        env = gym.make("LunarLander-v3", continuous=True)
+        env = gym.make("LunarLander-v3", continuous=True, render_mode=None)
     elif env_name == "CarRacing-v3":
-        env = gym.make("CarRacing-v3", continuous=True)
+        env = gym.make("CarRacing-v3", continuous=True, render_mode=None)  # Added render_mode=None
     else:
         raise ValueError(f"Unknown environment: {env_name}")
     
@@ -141,14 +141,7 @@ def train_sac(env_name, config, use_wandb=True):
                 for _ in range(config['num_updates']):
                     critic_loss, actor_loss, alpha_loss, alpha = agent.update(config['batch_size'])
                     
-                    if use_wandb and critic_loss is not None:
-                        wandb.log({
-                            'train/critic_loss': critic_loss,
-                            'train/actor_loss': actor_loss,
-                            'train/alpha_loss': alpha_loss if alpha_loss else 0,
-                            'train/alpha': alpha,
-                            'train/total_steps': total_steps
-                        })
+                    
             
             if done or truncated:
                 break
@@ -237,7 +230,7 @@ def main():
         config['device'] = args.device
     
     # Train
-    train_sac(args.env, config, use_wandb=not args.no_wandb)
+    train_sac(args.env, config, use_wandb=True)
 
 
 if __name__ == "__main__":
