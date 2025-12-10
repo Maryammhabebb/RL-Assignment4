@@ -46,6 +46,7 @@ def train(env_name, episodes=500):
 
     # Create agent + replay buffer
     agent = TD3Agent(state_dim, action_dim, max_action, device)
+
     replay_buffer = ReplayBuffer(
         max_size=1_000_000,
         state_dim=state_dim,
@@ -81,7 +82,7 @@ def train(env_name, episodes=500):
     # Training Loop
     # ------------------------
     total_steps = 0
-    warmup_steps = 10000  # Random actions for exploration
+    warmup_steps = 10_000
     episode_rewards = []
     best_avg_reward = -float('inf')
     
@@ -97,7 +98,7 @@ def train(env_name, episodes=500):
 
         while not (terminated or truncated):
 
-            # Select action from agent (random during warmup)
+            # Select action (random during warmup)
             if total_steps < warmup_steps:
                 action = env.action_space.sample()
             else:
@@ -110,10 +111,10 @@ def train(env_name, episodes=500):
             # Add transition
             replay_buffer.add(state, action, reward, next_state, done)
 
-            # Train agent — returns training metrics
+            # Learn from replay buffer
             metrics = agent.train(replay_buffer)
 
-            # Log critic + actor losses
+            # Log critic + actor + Q-value losses
             if metrics is not None:
                 wandb.log({
                     "losses/critic_loss": metrics["critic_loss"],
@@ -134,7 +135,7 @@ def train(env_name, episodes=500):
             steps += 1
             total_steps += 1
 
-        # Track episode rewards
+        # Track episode reward
         episode_rewards.append(ep_reward)
         avg_reward_10 = np.mean(episode_rewards[-10:])
         avg_reward_100 = np.mean(episode_rewards[-100:])  # Last 100 episodes
@@ -232,8 +233,13 @@ def train(env_name, episodes=500):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--env", type=str, default="lunarlander", help="Environment name: lunarlander or carracing (default: lunarlander)")
-    parser.add_argument("--episodes", type=int, default=500, help="Number of training episodes (default: 1000, recommended: 1000-2000 for best results)")
+    parser.add_argument(
+        "--env",
+        type=str,
+        default="lunarlander",
+        help="Environment name: lunarlander or carracing"
+    )
+    parser.add_argument("--episodes", type=int, default=500)
     args = parser.parse_args()
 
     train(args.env.lower(), episodes=args.episodes)

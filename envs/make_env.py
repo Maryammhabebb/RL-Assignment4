@@ -21,13 +21,20 @@ class SimplifyCarRacing(gym.ObservationWrapper):
         return resized.transpose(2,0,1).astype(np.float32) / 255.0
 
 
-def make_env(env_name, render_mode=None):
+def make_env(env_name: str, render_mode=None):
     """
-    Creates the correct continuous-action environment for TD3/PPO/SAC.
-    Supports: lunarlander, carracing
-    """
+    Factory for environments used in the assignment.
 
-    env_name = env_name.lower()
+    Supported values for env_name (case-insensitive):
+
+      - "lunarlander"  -> LunarLanderContinuous-v3
+      - "carracing"    -> CarRacing-v3 (continuous, with preprocessing)
+
+    `render_mode`:
+      - None          -> no rendering (training)
+      - "rgb_array"   -> for RecordVideo, evaluation
+    """
+    name = env_name.lower()
 
     # ----------------------------
     # LunarLander Continuous
