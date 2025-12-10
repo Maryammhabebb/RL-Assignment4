@@ -23,7 +23,7 @@ SAC_CONFIGS = {
         "start_steps": 10000,  # Random exploration steps
         "update_after": 1000,  # Start training after this many steps
         "update_every": 50,    # Update frequency
-        "num_updates": 1,     # Number of updates per update step
+        "num_updates": 10,     # Number of updates per update step
         
         # Evaluation
         "eval_frequency": 50,  # Evaluate every N episodes
@@ -89,7 +89,7 @@ WANDB_CONFIG = {
 # General settings
 GENERAL_CONFIG = {
     "seed": 42,
-    "device": "cuda",  # "cuda" or "cpu"
+    "device": "cpu",  # "cuda" or "cpu"
     "save_dir": "trained_models/sac",
     "log_dir": "logs/sac",
 }
