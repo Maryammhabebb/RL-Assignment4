@@ -1,32 +1,69 @@
-# envs/wrappers_carracing.py
-
-import gymnasium as gym
 import numpy as np
+import gymnasium as gym
+import cv2
+from envs.frame_stack import FrameStack   # custom stacker
 
-class CarRacingWrapper:
-    """
-    Simple wrapper for CarRacing-v3 to expose a clean continuous environment
-    for TD3 (steering, gas, brake).
-    """
 
-    def __init__(self):
-        self.env = gym.make("CarRacing-v3", continuous=True)
+def make_carracing_env(render_mode=None, num_stack=4, resize_shape=84):
 
-        self.action_space = self.env.action_space
-        self.observation_space = self.env.observation_space
+    # Base environment
+    env = gym.make(
+        "CarRacing-v3",
+        continuous=True,
+        render_mode=render_mode,
+    )
 
-    def reset(self):
-        obs, info = self.env.reset()
-        return obs, info
+    # ---------------------------------------
+    # 1) Grayscale wrapper
+    # ---------------------------------------
+    class Gray(gym.ObservationWrapper):
+        def __init__(self, env):
+            super().__init__(env)
+            h, w, _ = env.observation_space.shape
+            self.observation_space = gym.spaces.Box(
+                0, 255, shape=(h, w, 1), dtype=np.uint8
+            )
 
-    def step(self, action):
-        action = np.clip(action, -1, 1)
-        obs, reward, terminated, truncated, info = self.env.step(action)
-        done = terminated or truncated
-        return obs, reward, done, info
+        def observation(self, obs):
+            gray = cv2.cvtColor(obs, cv2.COLOR_RGB2GRAY)
+            return np.expand_dims(gray, axis=2)  # (H, W, 1)
 
-    def render(self):
-        return self.env.render()
+    # ---------------------------------------
+    # 2) Resize wrapper
+    # ---------------------------------------
+    class Resize(gym.ObservationWrapper):
+        def __init__(self, env, size):
+            super().__init__(env)
+            self.size = size
+            self.observation_space = gym.spaces.Box(
+                0, 255, shape=(size, size, 1), dtype=np.uint8
+            )
 
-    def close(self):
-        self.env.close()
+        def observation(self, obs):
+            resized = cv2.resize(obs, (self.size, self.size), interpolation=cv2.INTER_AREA)
+            return np.expand_dims(resized, axis=2)
+
+    # ---------------------------------------
+    # 3) Normalize + CHW wrapper
+    # ---------------------------------------
+    class NormalizeCHW(gym.ObservationWrapper):
+        def __init__(self, env):
+            super().__init__(env)
+            h, w, c = env.observation_space.shape
+            self.observation_space = gym.spaces.Box(
+                0.0, 1.0, shape=(c, h, w), dtype=np.float32
+            )
+
+        def observation(self, obs):
+            obs = obs.astype(np.float32) / 255.0
+            return np.transpose(obs, (2, 0, 1))  # (C, H, W)
+
+    # ---------------------------------------
+    # Apply wrappers in correct order
+    # ---------------------------------------
+    env = Gray(env)
+    env = Resize(env, resize_shape)
+    env = FrameStack(env, num_stack)   # our custom fixed stacker
+    env = NormalizeCHW(env)
+
+    return env
