@@ -230,7 +230,7 @@ def main():
         config['device'] = args.device
     
     # Train
-    train_sac(args.env, config, use_wandb=False)
+    train_sac(args.env, config, use_wandb=True)
 
 
 if __name__ == "__main__":
