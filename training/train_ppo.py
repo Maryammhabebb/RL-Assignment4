@@ -61,8 +61,20 @@ def train(env_name, episodes=10000):
             "episodes": episodes,
             "state_dim": state_dim,
             "action_dim": action_dim,
+            "max_action": max_action,
+            "buffer_size": agent.buffer_size,
+            "batch_size": agent.batch_size,
+            "epochs": agent.epochs,
+            "actor_lr": agent.actor_lr,
+            "critic_lr": agent.critic_lr,
+            "gamma": agent.gamma,
+            "gae_lambda": agent.gae_lambda,
+            "epsilon": agent.epsilon,
+            "entropy_coef": agent.entropy_coef,
+            "device": device
         }
     )
+    print("📊 Weights & Biases initialized\n")
 
     # ------------------------
     # Training Loop
@@ -73,7 +85,8 @@ def train(env_name, episodes=10000):
     best_avg_reward = -float('inf')
     training_count = 0
     
-    print("Starting training...\n")
+    print("Starting training...")
+    print(f"⌛ Buffer fills every ~{agent.buffer_size} steps, then trains for {agent.epochs} epochs\n")
     
     for episode in range(episodes):
         
@@ -115,8 +128,9 @@ def train(env_name, episodes=10000):
                         "losses/actor_loss": actor_loss,
                         "losses/critic_loss": critic_loss,
                         "losses/entropy": entropy,
-                        "timestep": total_timesteps,
-                        "training_count": training_count
+                        "losses/total_loss": actor_loss + critic_loss,
+                        "training/update_count": training_count,
+                        "timestep": total_timesteps
                     })
         
         # Episode finished
@@ -140,6 +154,10 @@ def train(env_name, episodes=10000):
             "episode/avg_reward_100": avg_reward_100,
             "episode/best_avg_reward": best_avg_reward,
             "episode/number": episode + 1,
+            "episode/avg_length": avg_length,
+            "buffer/size": len(agent.states),
+            "buffer/utilization": len(agent.states) / agent.buffer_size,
+            "training/updates": training_count,
             "timestep": total_timesteps
         })
         

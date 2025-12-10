@@ -118,31 +118,37 @@ class SAC:
         tau=0.005,
         alpha=0.2,
         automatic_entropy_tuning=True,
-        device='cpu'
+        device=None
     ):
         self.gamma = gamma
         self.tau = tau
         self.alpha = alpha
-        self.device = device
+        # choose device: prefer provided device, else CUDA if available
+        if device is None:
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        else:
+            self.device = torch.device(device)
         
         # Actor network
-        self.actor = Actor(state_dim, action_dim, hidden_dim).to(device)
+        self.actor = Actor(state_dim, action_dim, hidden_dim).to(self.device)
         self.actor_optimizer = optim.Adam(self.actor.parameters(), lr=lr)
         
         # Critic networks
-        self.critic = Critic(state_dim, action_dim, hidden_dim).to(device)
-        self.critic_target = Critic(state_dim, action_dim, hidden_dim).to(device)
+        self.critic = Critic(state_dim, action_dim, hidden_dim).to(self.device)
+        self.critic_target = Critic(state_dim, action_dim, hidden_dim).to(self.device)
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.critic_optimizer = optim.Adam(self.critic.parameters(), lr=lr)
         
-        print(next(self.actor.parameters()).device)  # should print 'cuda:0'
-        print(next(self.critic.parameters()).device)
+        # show chosen device
+        # (kept as info; can be removed if noisy)
+        print(f"SAC networks on device: {self.device}")
 
         # Automatic entropy tuning
         self.automatic_entropy_tuning = automatic_entropy_tuning
         if automatic_entropy_tuning:
-            self.target_entropy = -action_dim
-            self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
+            self.target_entropy = -float(action_dim)
+            # keep log_alpha on the same device as networks
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=self.device)
             self.alpha_optimizer = optim.Adam([self.log_alpha], lr=lr)
             self.alpha = self.log_alpha.exp()
         
@@ -150,14 +156,17 @@ class SAC:
         self.replay_buffer = ReplayBuffer()
     
     def select_action(self, state, evaluate=False):
-        state = torch.FloatTensor(state).to(self.device).unsqueeze(0)
-        
-        if evaluate:
-            _, _, action = self.actor.sample(state)
-        else:
-            action, _, _ = self.actor.sample(state)
-        
-        return action.detach().cpu().numpy()[0]
+        state = torch.as_tensor(state, dtype=torch.float32, device=self.device).unsqueeze(0)
+
+        with torch.no_grad():
+            if evaluate:
+                # deterministic: use mean action (no reparameterized noise)
+                mean, _ = self.actor.forward(state)
+                action_tensor = torch.tanh(mean)
+            else:
+                action_tensor, _, _ = self.actor.sample(state)
+
+        return action_tensor.detach().cpu().numpy()[0]
     
     def update(self, batch_size):
         if len(self.replay_buffer) < batch_size:
@@ -166,17 +175,19 @@ class SAC:
         # Sample batch
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(batch_size)
         
-        states = torch.FloatTensor(states).to(self.device)
-        actions = torch.FloatTensor(actions).to(self.device)
-        rewards = torch.FloatTensor(rewards).unsqueeze(1).to(self.device)
-        next_states = torch.FloatTensor(next_states).to(self.device)
-        dones = torch.FloatTensor(dones).unsqueeze(1).to(self.device)
+        states = torch.as_tensor(states, dtype=torch.float32, device=self.device)
+        actions = torch.as_tensor(actions, dtype=torch.float32, device=self.device)
+        rewards = torch.as_tensor(rewards, dtype=torch.float32, device=self.device).unsqueeze(1)
+        next_states = torch.as_tensor(next_states, dtype=torch.float32, device=self.device)
+        dones = torch.as_tensor(dones, dtype=torch.float32, device=self.device).unsqueeze(1)
         
         # Update critic
         with torch.no_grad():
             next_actions, next_log_pi, _ = self.actor.sample(next_states)
             q1_next, q2_next = self.critic_target(next_states, next_actions)
-            q_next = torch.min(q1_next, q2_next) - self.alpha * next_log_pi
+            # ensure alpha is a tensor on correct device
+            alpha_for_calc = self.alpha if isinstance(self.alpha, torch.Tensor) else torch.tensor(self.alpha, device=self.device)
+            q_next = torch.min(q1_next, q2_next) - alpha_for_calc * next_log_pi
             q_target = rewards + (1 - dones) * self.gamma * q_next
         
         q1, q2 = self.critic(states, actions)
@@ -190,7 +201,8 @@ class SAC:
         new_actions, log_pi, _ = self.actor.sample(states)
         q1_new, q2_new = self.critic(states, new_actions)
         q_new = torch.min(q1_new, q2_new)
-        actor_loss = (self.alpha * log_pi - q_new).mean()
+        alpha_for_calc = self.alpha if isinstance(self.alpha, torch.Tensor) else torch.tensor(self.alpha, device=self.device)
+        actor_loss = (alpha_for_calc * log_pi - q_new).mean()
         
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -200,11 +212,12 @@ class SAC:
         alpha_loss = None
         if self.automatic_entropy_tuning:
             alpha_loss = -(self.log_alpha * (log_pi + self.target_entropy).detach()).mean()
-            
+
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
-            
+
+            # keep alpha as tensor on proper device for calculations
             self.alpha = self.log_alpha.exp()
             alpha_loss = alpha_loss.item()
         
@@ -212,7 +225,7 @@ class SAC:
         for param, target_param in zip(self.critic.parameters(), self.critic_target.parameters()):
             target_param.data.copy_(self.tau * param.data + (1 - self.tau) * target_param.data)
         
-        return critic_loss.item(), actor_loss.item(), alpha_loss, self.alpha.item() if isinstance(self.alpha, torch.Tensor) else self.alpha
+        return critic_loss.item(), actor_loss.item(), alpha_loss, (self.alpha.item() if isinstance(self.alpha, torch.Tensor) else self.alpha)
     
     def save(self, filepath):
         torch.save({

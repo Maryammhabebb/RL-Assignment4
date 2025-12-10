@@ -23,14 +23,16 @@ class PPOAgent:
         self.entropy_coef = PPO_CONFIG["entropy_coef"]
         self.value_coef = PPO_CONFIG["value_coef"]
         self.max_grad_norm = PPO_CONFIG["max_grad_norm"]
+        self.actor_lr = PPO_CONFIG["actor_lr"]
+        self.critic_lr = PPO_CONFIG["critic_lr"]
 
         # Actor and Critic networks
         self.actor = Actor(state_dim, action_dim, max_action).to(device)
         self.critic = Critic(state_dim).to(device)
 
         # Optimizers
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=PPO_CONFIG["actor_lr"])
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=PPO_CONFIG["critic_lr"])
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)
 
         # Rollout buffer
         self.states = []

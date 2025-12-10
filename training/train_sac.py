@@ -5,12 +5,19 @@ Usage: python train_sac.py --env LunarLanderContinuous-v3
 
 import argparse
 import os
+import sys
 import numpy as np
 import torch
 import gymnasium as gym
 import wandb
 from datetime import datetime
 from pathlib import Path
+
+# Ensure project root is on sys.path so `models` package can be imported
+# (when running the script directly from `training/`)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from models.SAC.SAC import SAC
 from models.SAC.config import SAC_CONFIGS, WANDB_CONFIG, GENERAL_CONFIG
@@ -109,6 +116,50 @@ def train_sac(env_name, config, use_wandb=True):
     total_steps = 0
     best_eval_reward = -float('inf')
     solved_count = 0
+    # Track episode rewards for final statistics (like PPO)
+    episode_rewards = []
+
+    def _build_checkpoint_dict(ep, avg_reward):
+        """Build a checkpoint dict from the agent in a few compatible key styles.
+        Tries to include actor and critic state dicts if available."""
+        ckpt = {
+            'timesteps': total_steps,
+            'episodes': ep,
+            'avg_reward': float(avg_reward)
+        }
+
+        # Actor
+        if hasattr(agent, 'actor'):
+            try:
+                ckpt['actor_state_dict'] = agent.actor.state_dict()
+            except Exception:
+                pass
+        elif hasattr(agent, 'policy'):
+            try:
+                ckpt['actor_state_dict'] = agent.policy.state_dict()
+            except Exception:
+                pass
+
+        # Critics: support several naming conventions
+        if hasattr(agent, 'critic'):
+            try:
+                ckpt['critic_state_dict'] = agent.critic.state_dict()
+            except Exception:
+                pass
+        else:
+            # try critic_1 / critic_2
+            if hasattr(agent, 'critic_1'):
+                try:
+                    ckpt['critic_1_state_dict'] = agent.critic_1.state_dict()
+                except Exception:
+                    pass
+            if hasattr(agent, 'critic_2'):
+                try:
+                    ckpt['critic_2_state_dict'] = agent.critic_2.state_dict()
+                except Exception:
+                    pass
+
+        return ckpt
     
     print("\nStarting training...")
     print("=" * 50)
@@ -137,11 +188,7 @@ def train_sac(env_name, config, use_wandb=True):
             state = next_state
             
             # Update agent
-            if total_steps >= config['update_after'] and total_steps % config['update_every'] == 0:
-                for _ in range(config['num_updates']):
-                    critic_loss, actor_loss, alpha_loss, alpha = agent.update(config['batch_size'])
-                    
-                    
+            # (Training moved to per-episode) updates are performed after episode ends
             
             if done or truncated:
                 break
@@ -159,6 +206,22 @@ def train_sac(env_name, config, use_wandb=True):
                 'train/episode_steps': episode_steps,
                 'train/episode': episode
             })
+
+        # Save episode reward for final summary
+        episode_rewards.append(episode_reward)
+        # Perform SAC updates once per episode (instead of during steps)
+        if total_steps >= config.get('update_after', 0):
+            for _ in range(config.get('num_updates', 0)):
+                critic_loss, actor_loss, alpha_loss, alpha = agent.update(config['batch_size'])
+                if use_wandb and critic_loss is not None:
+                    wandb.log({
+                        'train/critic_loss': critic_loss,
+                        'train/actor_loss': actor_loss,
+                        'train/alpha_loss': alpha_loss if alpha_loss else 0,
+                        'train/alpha': alpha,
+                        'train/total_steps': total_steps,
+                        'train/episode': episode
+                    })
         
         # Evaluation
         if episode % config['eval_frequency'] == 0 and episode > 0:
@@ -175,8 +238,18 @@ def train_sac(env_name, config, use_wandb=True):
             # Save best model
             if eval_reward > best_eval_reward:
                 best_eval_reward = eval_reward
+                # keep previous timestamped save for traceability
                 agent.save(save_dir / 'best_model.pt')
-                print(f"New best model saved! Reward: {eval_reward:.2f}")
+
+                # Also save a standardized checkpoint into saved_models like PPO
+                saved_base = Path('saved_models') / 'sac'
+                saved_base.mkdir(parents=True, exist_ok=True)
+                ckpt_path = saved_base / f"{env_name}_best.pth"
+                try:
+                    torch.save(_build_checkpoint_dict(episode, eval_reward), ckpt_path)
+                    print(f"New best model saved! Reward: {eval_reward:.2f} -> {ckpt_path}")
+                except Exception as e:
+                    print(f"Warning: failed to write standardized best checkpoint: {e}")
             
             # Check if solved
             if eval_reward >= config['target_reward']:
@@ -191,11 +264,33 @@ def train_sac(env_name, config, use_wandb=True):
         
         # Save checkpoint
         if episode % config['save_frequency'] == 0 and episode > 0:
+            # Keep the original checkpoint in the timestamped folder
             agent.save(save_dir / f'checkpoint_ep{episode}.pt')
+
+            # Also write a PPO-style checkpoint into saved_models/sac/checkpoints
+            ckpt_dir = Path('saved_models') / 'sac' / 'checkpoints'
+            ckpt_dir.mkdir(parents=True, exist_ok=True)
+            ckpt_file = ckpt_dir / f"{env_name}_ep{episode}.pth"
+            try:
+                torch.save(_build_checkpoint_dict(episode, episode_reward), ckpt_file)
+                print(f"Checkpoint saved: {ckpt_file}")
+            except Exception as e:
+                print(f"Warning: failed to write standardized checkpoint: {e}")
     
     # Final save
     agent.save(save_dir / 'final_model.pt')
-    print(f"\nTraining completed! Models saved to {save_dir}")
+
+    # Also save final standardized model in saved_models/sac
+    saved_base = Path('saved_models') / 'sac'
+    saved_base.mkdir(parents=True, exist_ok=True)
+    final_avg = float(np.mean(episode_rewards[-100:])) if len(episode_rewards) > 0 else 0.0
+    final_path = saved_base / f"{env_name}_final.pth"
+    try:
+        torch.save(_build_checkpoint_dict(config.get('max_episodes', episode), final_avg), final_path)
+        print(f"\nTraining completed! Models saved to {save_dir} and {final_path}")
+    except Exception as e:
+        print(f"\nTraining completed! Models saved to {save_dir}. Failed to write standardized final: {e}")
+
     print(f"Best evaluation reward: {best_eval_reward:.2f}")
     
     env.close()
