@@ -22,7 +22,7 @@ SAC_CONFIGS = {
         "buffer_size": 1000000,
         "start_steps": 10000,  # Random exploration steps
         "update_after": 1000,  # Start training after this many steps
-        "update_every": 50,    # Update frequency
+        "update_every": 500,    # Update frequency
         "num_updates": 50,     # Number of updates per update step
         
         # Evaluation
