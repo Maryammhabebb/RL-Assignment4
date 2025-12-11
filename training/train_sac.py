@@ -35,9 +35,9 @@ def set_seed(seed):
 def create_env(env_name, seed):
     """Create and configure environment"""
     if env_name == "LunarLanderContinuous-v3":
-        env = gym.make("LunarLander-v3", continuous=True, render_mode=None)
+        env = gym.make("LunarLander-v3", continuous=True)
     elif env_name == "CarRacing-v3":
-        env = gym.make("CarRacing-v3", continuous=True, render_mode=None)  # Added render_mode=None
+        env = gym.make("CarRacing-v3", continuous=True)
     else:
         raise ValueError(f"Unknown environment: {env_name}")
     
@@ -325,7 +325,7 @@ def main():
         config['device'] = args.device
     
     # Train
-    train_sac(args.env, config, use_wandb=True)
+    train_sac(args.env, config, use_wandb=not args.no_wandb)
 
 
 if __name__ == "__main__":

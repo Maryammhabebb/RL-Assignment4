@@ -28,4 +28,10 @@ PPO_CONFIG_CARRACING = {
     "value_coef": 0.5,
     "max_grad_norm": 0.5,
     "weight_decay": 1e-4,      # L2 Regularization to prevent overfitting
+    # Default names and metadata for experiments (can be overridden)
+    "env_name": "CarRacing-v3",
+    "experiment_name": "ppo_carracing_v3",
+    "use_wandb": True,
+    "wandb_project": "ppo-carracing-v3",
+    "wandb_run_name": "ppo_carracing_v3_default",
 }
